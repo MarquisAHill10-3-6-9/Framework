@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+src/framework.egg-info/PKG-INFO
+src/framework.egg-info/SOURCES.txt
+src/framework.egg-info/dependency_links.txt
+src/framework.egg-info/top_level.txt
+src/framework_core/__init__.py
+src/framework_core/core.py
+tests/test_core_invariants.py
