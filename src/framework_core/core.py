@@ -1,3 +1,6 @@
+__all__ = ["Core"]
+
+
 import time
 import json
 import hashlib
@@ -127,3 +130,24 @@ class Core:
                 "prev_hash": prev_hash,
             }
         )
+
+    def validate(self) -> None:
+        prev = "GENESIS"
+
+        for i, e in enumerate(self._ledger):
+            if e.prev_hash != prev:
+                raise ValueError(f"Ledger broken at index {i}: prev_hash mismatch")
+
+            expected = self._compute_entry_hash(
+                ts=e.ts,
+                event=e.event,
+                action=e.action,
+                data=e.data,
+                fingerprint=e.fingerprint,
+                prev_hash=e.prev_hash,
+            )
+
+            if e.entry_hash != expected:
+                raise ValueError(f"Tamper detected at index {i}: entry_hash mismatch")
+
+            prev = e.entry_hash
