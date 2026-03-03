@@ -132,9 +132,37 @@ class Core:
         )
 
     def validate(self) -> None:
+                # Basic invariants
+        if not isinstance(self._version, int) or self._version < 1:
+            raise ValueError(f"Invalid version: {self._version}")
+
+        if not isinstance(self._initialized, bool):
+            raise ValueError(f"Invalid initialized flag: {self._initialized}")
+
+        if not isinstance(self._ledger, list):
+            raise ValueError("Ledger is not a list")
+
+        if len(self._ledger) == 0:
+            raise ValueError("Ledger is empty")
+
         prev = "GENESIS"
+        last_ts = None
+        last_version = None
 
         for i, e in enumerate(self._ledger):
+            # --- Genesis rules ---
+            if i == 0:
+                if e.prev_hash != "GENESIS":
+                    raise ValueError("First ledger entry must have prev_hash='GENESIS'")
+                if e.action != "__init__":
+                    raise ValueError("First ledger entry must be action='__init__'")
+
+            # --- Time coherence ---
+            if last_ts is not None and e.ts < last_ts:
+                raise ValueError(f"Time moved backwards at index {i}")
+            last_ts = e.ts
+
+            # --- Hash chain linkage ---
             if e.prev_hash != prev:
                 raise ValueError(f"Ledger broken at index {i}: prev_hash mismatch")
 
@@ -146,8 +174,31 @@ class Core:
                 fingerprint=e.fingerprint,
                 prev_hash=e.prev_hash,
             )
-
             if e.entry_hash != expected:
                 raise ValueError(f"Tamper detected at index {i}: entry_hash mismatch")
 
+            # --- Version semantics (initialize must bump by 1) ---
+            v, init_flag = e.fingerprint
+            if not isinstance(v, int) or v < 1:
+                raise ValueError(f"Invalid fingerprint version at index {i}")
+            if not isinstance(init_flag, bool):
+                raise ValueError(f"Invalid fingerprint initialized flag at index {i}")
+
+            if last_version is not None:
+                if e.action == "initialize":
+                    if v != last_version + 1:
+                        raise ValueError(f"initialize must bump version by 1 at index {i}")
+                else:
+                    # Non-initialize actions should not decrease version
+                    if v < last_version:
+                        raise ValueError(f"Version decreased at index {i}")
+
+            last_version = v
             prev = e.entry_hash
+
+        # --- Final state must match the last fingerprint ---
+        last_fp_version, last_fp_init = self._ledger[-1].fingerprint
+        if last_fp_version != self._version:
+            raise ValueError("Current version does not match last ledger fingerprint")
+        if last_fp_init != self._initialized:
+            raise ValueError("Current initialized flag does not match last ledger fingerprint")
